@@ -14,6 +14,7 @@ const I = {
     toL: "To",
     go: "Simulate",
     send: "Try to send",
+    stopped: "Send stopped",
     wait: "Reading the chain…",
     hint: {
       pass: "1 USDC from a public wallet that can pay the fee.",
@@ -35,6 +36,7 @@ const I = {
     toL: "Para",
     go: "Simular",
     send: "Tentar enviar",
+    stopped: "Envio travado",
     wait: "Lendo a rede…",
     hint: {
       pass: "1 USDC de uma carteira pública que paga a taxa.",
@@ -51,6 +53,7 @@ const DRY = {
 };
 let lang = localStorage.getItem("pharos-lang") === "pt" ? "pt" : "en";
 let sample = "pass";
+let cleared = false;
 const $ = (id) => document.getElementById(id);
 
 function apply() {
@@ -67,7 +70,8 @@ function apply() {
   $("fromL").textContent = t.fromL;
   $("toL").textContent = t.toL;
   $("go").textContent = t.go;
-  $("send").textContent = t.send;
+  $("send").textContent = cleared ? t.send : t.stopped;
+  $("send").disabled = !cleared;
   $("hint").textContent = t.hint[sample];
   document.querySelectorAll("[data-lang]").forEach((button) => button.classList.toggle("on", button.dataset.lang === lang));
   document.querySelectorAll("[data-sample]").forEach((button) => button.classList.toggle("on", button.dataset.sample === sample));
@@ -127,12 +131,16 @@ async function run(execute) {
       ? `<p class="line mono" style="animation-delay:${(start + notes.length) * 55}ms">${esc(JSON.stringify(data.unsigned))}</p>`
       : "";
     $("lines").innerHTML = table + body + raw;
-    $("send").disabled = Boolean(data.blocked);
+    cleared = !data.blocked;
+    $("send").textContent = cleared ? I[lang].send : I[lang].stopped;
+    $("send").disabled = !cleared;
     setMode(data.verdict || "idle");
     $("out").scrollIntoView({ behavior: "smooth", block: "nearest" });
   } catch (error) {
     $("status").className = "status err";
     $("status").textContent = error.message;
+    cleared = false;
+    $("send").textContent = I[lang].stopped;
     $("send").disabled = true;
     setMode("revert");
   } finally {
@@ -145,13 +153,13 @@ $("samples").addEventListener("click", (event) => {
   if (!button) return;
   sample = button.dataset.sample;
   fill(sample);
-  $("send").disabled = true;
+  cleared = false;
   apply();
   setMode(sample === "custom" ? "idle" : sample === "pass" ? "idle" : sample);
 });
 ["kind", "token", "amount", "from", "to"].forEach((id) => {
-  $(id).addEventListener("input", () => { sample = "custom"; $("send").disabled = true; apply(); });
-  $(id).addEventListener("change", () => { sample = "custom"; $("send").disabled = true; $("tokenWrap").hidden = $("kind").value === "native"; apply(); });
+  $(id).addEventListener("input", () => { sample = "custom"; cleared = false; apply(); });
+  $(id).addEventListener("change", () => { sample = "custom"; cleared = false; $("tokenWrap").hidden = $("kind").value === "native"; apply(); });
 });
 $("form").addEventListener("submit", (event) => { event.preventDefault(); run(false); });
 $("send").addEventListener("click", () => run(true));

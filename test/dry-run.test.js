@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { balanceDelta, bufferedGas, buildCall, decide, finish, predictBalances, SAMPLES } from "../lib/dry-run.js";
+import { markCall, withCallLog } from "../lib/mcp.js";
 
 const FROM = SAMPLES.pass.from;
 const TO = SAMPLES.pass.to;
@@ -82,6 +83,26 @@ test("balances move only when the transaction would actually be mined", () => {
   assert.equal(mined.fromToken, 5n);
   assert.equal(mined.toToken, 6n);
   assert.equal(mined.fromNative, 93n);
+});
+
+test("two requests on one connection keep separate call lists", async () => {
+  const client = {};
+  const [first, second] = await Promise.all([
+    withCallLog(async () => {
+      markCall(client, "eth_call");
+      await Promise.resolve();
+      markCall(client, "estimate_gas");
+      return "pass";
+    }),
+    withCallLog(async () => {
+      markCall(client, "get_balance");
+      await Promise.resolve();
+      return "gas";
+    }),
+  ]);
+  assert.deepEqual(first.calls, ["eth_call", "estimate_gas"]);
+  assert.deepEqual(second.calls, ["get_balance"]);
+  assert.equal(first.out, "pass");
 });
 
 test("bad amount and bad address are refused before any call", () => {

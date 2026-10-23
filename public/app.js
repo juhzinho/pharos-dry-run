@@ -112,18 +112,31 @@ async function run(execute) {
     $("out").hidden = false;
     $("head").className = `verdict ${data.verdict}`;
     $("head").textContent = data.headline;
-    const lines = [...(data.lines || [])];
-    if (data.unsigned) lines.push(JSON.stringify(data.unsigned));
-    $("lines").innerHTML = lines.map((line, i) => `<p class="line${line.startsWith("{") ? " mono" : ""}" style="animation-delay:${i * 55}ms">${esc(line)}</p>`).join("");
+    const rows = data.rows || [];
+    const table = rows.length
+      ? `<div class="diff">${rows.map((row, i) => {
+          const tone = row.same ? "flat" : String(row.delta || "").startsWith("+") ? "up" : "down";
+          return `<div class="diff-row line" style="animation-delay:${i * 55}ms"><span>${esc(row.label)}</span><span>${esc(row.before)} → ${esc(row.after)}</span><b class="${tone}">${esc(row.delta)}</b></div>`;
+        }).join("")}</div>`
+      : "";
+    const blockLine = data.block != null ? (lang === "pt" ? `Bloco ${data.block}` : `Block ${data.block}`) : "";
+    const notes = [data.gasLine, blockLine, data.reason, data.gate].filter(Boolean);
+    const start = rows.length;
+    const body = notes.map((line, i) => `<p class="line" style="animation-delay:${(start + i) * 55}ms">${esc(line)}</p>`).join("");
+    const raw = data.unsigned
+      ? `<p class="line mono" style="animation-delay:${(start + notes.length) * 55}ms">${esc(JSON.stringify(data.unsigned))}</p>`
+      : "";
+    $("lines").innerHTML = table + body + raw;
+    $("send").disabled = Boolean(data.blocked);
     setMode(data.verdict || "idle");
     $("out").scrollIntoView({ behavior: "smooth", block: "nearest" });
   } catch (error) {
     $("status").className = "status err";
     $("status").textContent = error.message;
+    $("send").disabled = true;
     setMode("revert");
   } finally {
     $("go").disabled = false;
-    $("send").disabled = false;
   }
 }
 
@@ -132,12 +145,13 @@ $("samples").addEventListener("click", (event) => {
   if (!button) return;
   sample = button.dataset.sample;
   fill(sample);
+  $("send").disabled = true;
   apply();
   setMode(sample === "custom" ? "idle" : sample === "pass" ? "idle" : sample);
 });
 ["kind", "token", "amount", "from", "to"].forEach((id) => {
-  $(id).addEventListener("input", () => { sample = "custom"; apply(); });
-  $(id).addEventListener("change", () => { sample = "custom"; $("tokenWrap").hidden = $("kind").value === "native"; apply(); });
+  $(id).addEventListener("input", () => { sample = "custom"; $("send").disabled = true; apply(); });
+  $(id).addEventListener("change", () => { sample = "custom"; $("send").disabled = true; $("tokenWrap").hidden = $("kind").value === "native"; apply(); });
 });
 $("form").addEventListener("submit", (event) => { event.preventDefault(); run(false); });
 $("send").addEventListener("click", () => run(true));
